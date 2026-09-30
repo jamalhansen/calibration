@@ -1,0 +1,132 @@
+"""The daily 10 minutes: did Jamal write today, and if not, what's today's prompt.
+
+"Wrote today" is a word-count delta over his own prose folders against a
+baseline taken at the day's first check (the 03:30 `calib daily` snapshot, or
+failing that the previous day's last reading), or an explicit `calib write done`.
+"""
+
+import sqlite3
+from dataclasses import dataclass
+from datetime import date, timedelta
+from pathlib import Path
+
+from local_first_common.obsidian import parse_frontmatter_text
+
+THIN_SECTION_WORDS = 40
+
+
+def count_words(dirs: list[Path]) -> int:
+    total = 0
+    for d in dirs:
+        for path in d.rglob("*.md"):
+            try:
+                total += len(path.read_text(encoding="utf-8").split())
+            except OSError:
+                continue
+    return total
+
+
+def _row(conn: sqlite3.Connection, day: date) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM writing_days WHERE day = ?", (day.isoformat(),)).fetchone()
+
+
+def observe(conn: sqlite3.Connection, day: date, total: int) -> int:
+    """Record today's reading and return words written today."""
+    row = _row(conn, day)
+    if row is None:
+        prev = conn.execute(
+            "SELECT last_total FROM writing_days WHERE day < ? ORDER BY day DESC LIMIT 1", (day.isoformat(),)
+        ).fetchone()
+        baseline = prev["last_total"] if prev else total
+        conn.execute(
+            "INSERT INTO writing_days(day, baseline, last_total) VALUES (?, ?, ?)",
+            (day.isoformat(), baseline, total),
+        )
+    else:
+        baseline = row["baseline"]
+        conn.execute("UPDATE writing_days SET last_total = ? WHERE day = ?", (total, day.isoformat()))
+    conn.commit()
+    return max(0, total - baseline)
+
+
+def mark_done(conn: sqlite3.Connection, day: date, total: int) -> None:
+    observe(conn, day, total)
+    conn.execute("UPDATE writing_days SET marked_done = 1 WHERE day = ?", (day.isoformat(),))
+    conn.commit()
+
+
+def _done(row: sqlite3.Row | None, threshold: int) -> bool:
+    return bool(row) and (row["marked_done"] or row["last_total"] - row["baseline"] >= threshold)
+
+
+def streak(conn: sqlite3.Connection, today: date, threshold: int) -> int:
+    day = today if _done(_row(conn, today), threshold) else today - timedelta(days=1)
+    n = 0
+    while _done(_row(conn, day), threshold):
+        n += 1
+        day -= timedelta(days=1)
+    return n
+
+
+@dataclass
+class Section:
+    note: Path
+    title: str
+    heading: str
+
+
+def thin_sections(text: str) -> tuple[str, list[str]]:
+    """(post title, headings of '## ' sections with little prose), ignoring fenced code."""
+    _, body = parse_frontmatter_text(text)
+    title, sections, current, words, in_fence = "", [], None, 0, False
+    for line in body.splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if line.startswith("# ") and not title:
+            title = line[2:].strip()
+        elif line.startswith("## "):
+            if current is not None and words < THIN_SECTION_WORDS:
+                sections.append(current)
+            current, words = line[3:].strip(), 0
+        elif current is not None:
+            words += len(line.split())
+    if current is not None and words < THIN_SECTION_WORDS:
+        sections.append(current)
+    return title, sections
+
+
+def outline_sections(blog_dir: Path, recent: int = 3, today: date | None = None) -> list[Section]:
+    """Thin sections from the most recently touched outlines: that's where the momentum is.
+
+    Outlines with a future `ready_after` date are waiting on data and are skipped.
+    """
+    today = today or date.today()  # noqa: DTZ011 - local calendar date is the intent
+    outlines = []
+    for path in blog_dir.rglob("*.md"):
+        text = path.read_text(encoding="utf-8")
+        fm, _ = parse_frontmatter_text(text)
+        if str(fm.get("status", "")).lower() != "outline":
+            continue
+        ready = fm.get("ready_after")
+        if ready and str(ready)[:10] > today.isoformat():
+            continue
+        outlines.append((path.stat().st_mtime, path, text))
+    out = []
+    for _, path, text in sorted(outlines, key=lambda t: t[0], reverse=True)[:recent]:
+        title, headings = thin_sections(text)
+        out += [Section(path, title or path.stem, h) for h in headings]
+    return out
+
+
+def pick_prompt(today: date, digest_prompts: list[str], sections: list[Section]) -> str:
+    n = today.toordinal()
+    if digest_prompts and (n % 2 == 0 or not sections):
+        title = digest_prompts[(n // 2) % len(digest_prompts)]
+        return f"150 words on why you and the model split on “{title}” (this week's disagreement digest)."
+    if sections:
+        s = sections[n % len(sections)]
+        return f"One section: “{s.heading}” in {s.title} ({s.note.name})."
+    return "150 words on any seed in Contexta/seeds."
