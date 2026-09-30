@@ -16,6 +16,7 @@ from calib import (
     db,
     digest,
     funnel,
+    panel,
     predict,
     reader,
     rescore,
@@ -187,6 +188,8 @@ def daily(dry_run: DryRunOpt = False):
             typer.echo(f"Synced {run.item_count} docs; auto-resolved {len(resolved)} predictions.")
     if today.weekday() == 6:
         digest_cmd(dry_run=dry_run, no_sync=True)
+    if not dry_run:
+        _refresh(conn)
 
 
 # --- predictions -----------------------------------------------------------
@@ -202,6 +205,7 @@ def predict_add(
     p = probability / 100 if probability > 1 else probability
     pid = predict.add(_conn(), text, p, date.fromisoformat(due), post)
     typer.echo(f"#{pid}: {text} — {p:.0%} by {due}")
+    _refresh(_conn())
 
 
 @predict_app.command("list")
@@ -229,6 +233,7 @@ def predict_resolve(pid: int, outcome: Annotated[str, typer.Argument(help="yes o
         err.print(str(e))
         raise typer.Exit(1) from e
     typer.echo(f"#{pid} resolved: {outcome}")
+    _refresh(_conn())
 
 
 @predict_app.command("score")
@@ -279,6 +284,7 @@ def art_rate(
         err.print(str(e))
         raise typer.Exit(1) from e
     typer.echo(f"{path.name}: {stars}/5 (human_score {score:g})")
+    _refresh(_conn())
 
 
 @art_app.command("stats")
@@ -295,19 +301,31 @@ def _prompt_today(today: date) -> str:
     return writing.pick_prompt(today, prompts, writing.outline_sections(config.BRAINSYNC / "blog"))
 
 
+def _refresh(conn) -> tuple[int, bool, str]:
+    """Observe today's writing, rewrite the dashboard status file; returns (words, done, prompt)."""
+    today = _today()
+    words = writing.observe(conn, today, writing.count_words(config.WRITING_DIRS))
+    marked = bool(conn.execute("SELECT marked_done FROM writing_days WHERE day = ?", (today.isoformat(),)).fetchone()[0])
+    done = marked or words >= config.WRITING_DONE_WORDS
+    prompt = _prompt_today(today)
+    panel.write(config.STATUS_FILE, panel.build(
+        conn, today, words_today=words, done=done, prompt=prompt, threshold=config.WRITING_DONE_WORDS,
+        starters_dir=config.STARTERS_DIR, vault_root=config.BRAINSYNC, art_dir=config.ART_DIR,
+    ))
+    return words, done, prompt
+
+
 @write_app.command("status")
 def write_status(hook: Annotated[bool, typer.Option("--hook", help="Output for a Claude Code SessionStart hook.")] = False):
     """Words written today, the streak, and today's 10-minute prompt if you haven't written yet."""
     conn = _conn()
     today = _today()
-    words = writing.observe(conn, today, writing.count_words(config.WRITING_DIRS))
-    marked = bool(conn.execute("SELECT marked_done FROM writing_days WHERE day = ?", (today.isoformat(),)).fetchone()[0])
-    done = marked or words >= config.WRITING_DONE_WORDS
+    words, done, prompt = _refresh(conn)
     days = writing.streak(conn, today, config.WRITING_DONE_WORDS)
     if done:
         msg = f"Wrote today ({words} words). Streak: {days} day{'s' if days != 1 else ''}."
     else:
-        msg = f"Write first, then code. 10 minutes: {_prompt_today(today)}"
+        msg = f"Write first, then code. 10 minutes: {prompt}"
         if days:
             msg += f" (Streak: {days}.)"
     if hook:
@@ -322,6 +340,7 @@ def write_done():
     """Count today as written (for writing that happened outside the vault)."""
     conn = _conn()
     writing.mark_done(conn, _today(), writing.count_words(config.WRITING_DIRS))
+    _refresh(conn)
     typer.echo(f"Marked. Streak: {writing.streak(conn, _today(), config.WRITING_DONE_WORDS)}.")
 
 

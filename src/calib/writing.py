@@ -15,14 +15,44 @@ from local_first_common.obsidian import parse_frontmatter_text
 THIN_SECTION_WORDS = 40
 
 
+def prose_words(text: str, starter: bool = False) -> int:
+    """Words of prose only: generated skeletons (headings, italic prompts, fact bullets) don't count as writing.
+
+    Reference notes (the weekly digest, READMEs) count as zero.
+    """
+    fm, body = parse_frontmatter_text(text)
+    if str(fm.get("status", "")).lower() == "reference":
+        return 0
+    words, in_fence = 0, False
+    for raw in body.splitlines():
+        if raw.strip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if not in_fence:
+            words += _line_prose_words(raw, include_bullets=not starter)
+    return words
+
+
+def _line_prose_words(raw: str, include_bullets: bool) -> int:
+    line = raw.strip()
+    if not line or line.startswith(("#", ">", "|")):
+        return 0
+    if line.startswith("*") and line.endswith("*") and not line.startswith("* "):
+        return 0
+    if not include_bullets and line.startswith(("- ", "* ", "1. ")):
+        return 0
+    return len(line.split())
+
+
 def count_words(dirs: list[Path]) -> int:
     total = 0
     for d in dirs:
         for path in d.rglob("*.md"):
             try:
-                total += len(path.read_text(encoding="utf-8").split())
+                text = path.read_text(encoding="utf-8")
             except OSError:
                 continue
+            total += prose_words(text, starter="starters" in path.relative_to(d).parts)
     return total
 
 
@@ -76,7 +106,10 @@ class Section:
 
 
 def thin_sections(text: str) -> tuple[str, list[str]]:
-    """(post title, headings of '## ' sections with little prose), ignoring fenced code."""
+    """(post title, headings of '## ' sections with little prose), ignoring fenced code.
+
+    Bullets, italic prompts and quotes are notes, not prose: a section of bullets is still unwritten.
+    """
     _, body = parse_frontmatter_text(text)
     title, sections, current, words, in_fence = "", [], None, 0, False
     for line in body.splitlines():
@@ -92,7 +125,7 @@ def thin_sections(text: str) -> tuple[str, list[str]]:
                 sections.append(current)
             current, words = line[3:].strip(), 0
         elif current is not None:
-            words += len(line.split())
+            words += _line_prose_words(line, include_bullets=False)
     if current is not None and words < THIN_SECTION_WORDS:
         sections.append(current)
     return title, sections

@@ -170,3 +170,20 @@ def test_outline_sections_skip_not_ready(tmp_path):
     assert notes == {"a.md"}
     notes = {s.note.name for s in writing.outline_sections(tmp_path, today=date(2026, 11, 2))}
     assert notes == {"a.md", "b.md"}
+
+
+def test_prose_words_ignores_skeletons():
+    skeleton = "---\nstatus: outline\n---\n# T\n\n## Hook\n\n*Write about it.*\n\n- a fact\n\n> note\n\n| a | b |\n"
+    assert writing.prose_words(skeleton, starter=True) == 0
+    assert writing.prose_words(skeleton + "\nMy own three words.\n", starter=True) == 4
+    assert writing.prose_words(skeleton, starter=False) == 3  # bullets (marker included) count outside starters
+    assert writing.prose_words("---\nstatus: reference\n---\nLots of words here.") == 0
+    assert writing.prose_words("```python\nx = 1\n```\nReal *emphasis* here.") == 3
+
+
+def test_count_words_treats_starters_folder_as_skeletons(tmp_path):
+    blog = tmp_path / "blog"
+    (blog / "starters" / "from-building" / "s").mkdir(parents=True)
+    (blog / "starters" / "from-building" / "s" / "s.md").write_text("- fact one\n\nMine.\n")
+    (blog / "post.md").write_text("- a bullet\n\nProse words.\n")
+    assert writing.count_words([blog]) == 1 + 5

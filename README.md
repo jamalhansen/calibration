@@ -46,4 +46,6 @@ Claude Code skills wrap the two interactive pieces: `/rate-art` (blind 1-5 ratin
 
 - `com.localfirst.calibration` runs `calib daily` at 03:30: writing baseline, Reader sync, auto-resolving post predictions; on Sundays it also writes the digest. Log: `~/sync/local-first/calibration.log`.
 - A Claude Code `SessionStart` hook runs `calib write status --hook`. Until you've written 100 words today in `BrainSync/blog` or `BrainSync/newsletter` (or run `calib write done`), each session opens with the day's 10-minute prompt: alternately a disagreement from the digest or a thin section of one of your three most recently touched outlines.
+- Dashboard: every writing command (and `com.localfirst.writing-status`, every 30 minutes) writes `~/sync/local-first/writing-practice-latest.json`, which fleet-dashboard-service shows as the **Writing practice** card at the top of the page (and in the phone snapshot): today's prompt, streak, starters as Obsidian links, and reminders for `/rate-art` and `/predict`.
+- Post starters: `BrainSync/blog/starters/` (see its `_README.md`). Word counts ignore skeleton text, so generated starters never count as writing.
 - Data: `~/sync/calibration/calibration.db` (picked up by `backup-local-first`). Paths are overridable in `~/.config/local-first/calibration.toml`.
