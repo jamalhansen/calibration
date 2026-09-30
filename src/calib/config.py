@@ -30,3 +30,10 @@ READWISE_TOKEN =os.environ.get("READWISE_TOKEN", "")
 # An item with no engagement stays "pending" this long before it counts as ignored.
 RESOLVE_AFTER_DAYS = int(get_setting(TOOL_NAME, "resolve_after_days", default=14))
 WRITING_DONE_WORDS = int(get_setting(TOOL_NAME, "writing_done_words", default=100))
+
+TIMELINE_DIR = BRAINSYNC / "timeline"
+# Morning pages count as a written day on their own; a hard morning still counts.
+MORNING_PAGES_MIN_WORDS = int(get_setting(TOOL_NAME, "morning_pages_min_words", default=50))
+PAGES_STARTERS_DIR = STARTERS_DIR / "from-pages"
+IDEAS_PROVIDER = str(get_setting(TOOL_NAME, "ideas_provider", default="claude-code"))
+IDEAS_MODEL = str(get_setting(TOOL_NAME, "ideas_model", default="sonnet"))

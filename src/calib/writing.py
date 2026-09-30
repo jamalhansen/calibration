@@ -89,10 +89,24 @@ def _done(row: sqlite3.Row | None, threshold: int) -> bool:
     return bool(row) and (row["marked_done"] or row["last_total"] - row["baseline"] >= threshold)
 
 
-def streak(conn: sqlite3.Connection, today: date, threshold: int) -> int:
-    day = today if _done(_row(conn, today), threshold) else today - timedelta(days=1)
+def day_done(
+    conn: sqlite3.Connection, day: date, threshold: int,
+    pages_words: dict[date, int] | None = None, pages_min: int = 50,
+) -> bool:
+    """A day counts for vault prose over `threshold`, a manual mark, or `pages_min` words of morning pages."""
+    return _done(_row(conn, day), threshold) or (pages_words or {}).get(day, 0) >= pages_min
+
+
+def streak(
+    conn: sqlite3.Connection, today: date, threshold: int,
+    pages_words: dict[date, int] | None = None, pages_min: int = 50,
+) -> int:
+    def done(d: date) -> bool:
+        return day_done(conn, d, threshold, pages_words, pages_min)
+
+    day = today if done(today) else today - timedelta(days=1)
     n = 0
-    while _done(_row(conn, day), threshold):
+    while done(day):
         n += 1
         day -= timedelta(days=1)
     return n
@@ -154,7 +168,16 @@ def outline_sections(blog_dir: Path, recent: int = 3, today: date | None = None)
     return out
 
 
-def pick_prompt(today: date, digest_prompts: list[str], sections: list[Section]) -> str:
+def pick_prompt(
+    today: date, digest_prompts: list[str], sections: list[Section],
+    own_words: tuple[date, str] | None = None,
+) -> str:
+    """Picking up your own last thought comes first: a sentence you already started is
+    easier to continue than any skeleton."""
+    if own_words:
+        day, quote = own_words
+        when = "Yesterday" if (today - day).days == 1 else day.strftime("On %A")
+        return f"{when} you wrote: “{quote}” Keep going."
     n = today.toordinal()
     if digest_prompts and (n % 2 == 0 or not sections):
         title = digest_prompts[(n // 2) % len(digest_prompts)]

@@ -10,6 +10,7 @@ dependencies = [
     "requests>=2.32",
     "local-first-common",
     "content-discovery-agent",
+    "pyyaml>=6.0.3",
 ]
 
 [project.scripts]

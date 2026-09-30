@@ -41,13 +41,45 @@ def list_starters(starters_dir: Path, vault_root: Path, today: date) -> list[dic
     return out
 
 
-def recent_days(conn: sqlite3.Connection, today: date, threshold: int, n: int = 14) -> list[dict]:
+def recent_days(
+    conn: sqlite3.Connection, today: date, threshold: int, n: int = 14,
+    pages_words: dict[date, int] | None = None, pages_min: int = 50,
+) -> list[dict]:
     days = []
     for i in range(n - 1, -1, -1):
         d = today - timedelta(days=i)
         row = conn.execute("SELECT * FROM writing_days WHERE day = ?", (d.isoformat(),)).fetchone()
-        days.append({"day": d.isoformat(), "done": writing._done(row, threshold), "tracked": row is not None})
+        tracked = row is not None or d in (pages_words or {})
+        days.append({"day": d.isoformat(), "done": writing.day_done(conn, d, threshold, pages_words, pages_min), "tracked": tracked})
     return days
+
+
+HEAT_LEVELS = (1, 100, 250, 500)  # words for levels 1-4; 0 words is level 0
+
+
+def heatmap(
+    conn: sqlite3.Connection, today: date, threshold: int,
+    pages_words: dict[date, int], pages_min: int, weeks: int = 53,
+) -> list[dict]:
+    """GitHub-style year: one entry per day from a Sunday `weeks` back through today.
+
+    Words are morning pages plus vault prose on days the prose tracker was running;
+    a day marked done with no counted words still shows as level 1.
+    """
+    start = today - timedelta(days=(today.weekday() + 1) % 7 + 7 * (weeks - 1))
+    rows = {r["day"]: r for r in conn.execute("SELECT * FROM writing_days WHERE day >= ?", (start.isoformat(),))}
+    out = []
+    d = start
+    while d <= today:
+        row = rows.get(d.isoformat())
+        prose = max(0, row["last_total"] - row["baseline"]) if row else 0
+        pages = pages_words.get(d, 0)
+        words = prose + pages
+        done = writing.day_done(conn, d, threshold, pages_words, pages_min)
+        level = sum(words >= cut for cut in HEAT_LEVELS) or (1 if done else 0)
+        out.append({"day": d.isoformat(), "words": words, "pages": pages, "done": done, "level": level})
+        d += timedelta(days=1)
+    return out
 
 
 def build(
@@ -61,7 +93,10 @@ def build(
     starters_dir: Path,
     vault_root: Path,
     art_dir: Path,
+    pages_words: dict[date, int] | None = None,
+    pages_min: int = 50,
 ) -> dict:
+    pages_words = pages_words or {}
     due = [dict(r) for r in predict.open_predictions(conn) if r["due"] <= today.isoformat() and not r["post"]]
     return {
         "generated": datetime.now().astimezone().isoformat(timespec="minutes"),
@@ -70,9 +105,12 @@ def build(
             "words": words_today,
             "threshold": threshold,
             "prompt": prompt,
-            "streak": writing.streak(conn, today, threshold),
+            "pages_words": pages_words.get(today, 0),
+            "pages_min": pages_min,
+            "streak": writing.streak(conn, today, threshold, pages_words, pages_min),
         },
-        "days": recent_days(conn, today, threshold),
+        "days": recent_days(conn, today, threshold, pages_words=pages_words, pages_min=pages_min),
+        "heatmap": heatmap(conn, today, threshold, pages_words, pages_min),
         "starters": list_starters(starters_dir, vault_root, today),
         "reminders": {
             "art_unrated": sum(i.human_score is None for i in art.load_items(art_dir)),

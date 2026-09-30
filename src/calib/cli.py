@@ -16,6 +16,8 @@ from calib import (
     db,
     digest,
     funnel,
+    ideas,
+    pages,
     panel,
     predict,
     reader,
@@ -188,6 +190,7 @@ def daily(dry_run: DryRunOpt = False):
             typer.echo(f"Synced {run.item_count} docs; auto-resolved {len(resolved)} predictions.")
     if today.weekday() == 6:
         digest_cmd(dry_run=dry_run, no_sync=True)
+        write_ideas(days=7, dry_run=dry_run)
     if not dry_run:
         _refresh(conn)
 
@@ -296,23 +299,38 @@ def art_stats(json_out: JsonOpt = False):
 
 # --- writing ---------------------------------------------------------------
 
-def _prompt_today(today: date) -> str:
+def _pages_words() -> tuple[dict[date, str], dict[date, int]]:
+    text = pages.by_day(config.TIMELINE_DIR)
+    return text, {d: pages.word_count(t) for d, t in text.items()}
+
+
+def _prompt_today(today: date, pages_text: dict[date, str] | None = None) -> str:
+    if pages_text is None:
+        pages_text, _ = _pages_words()
     prompts = digest.prompts_from_digest(digest.digest_path(config.PROMPTS_DIR, today))
-    return writing.pick_prompt(today, prompts, writing.outline_sections(config.BRAINSYNC / "blog"))
+    return writing.pick_prompt(
+        today, prompts, writing.outline_sections(config.BRAINSYNC / "blog"),
+        own_words=pages.recent_quote(pages_text, today),
+    )
 
 
-def _refresh(conn) -> tuple[int, bool, str]:
-    """Observe today's writing, rewrite the dashboard status file; returns (words, done, prompt)."""
+def _refresh(conn) -> tuple[int, bool, str, dict[date, int]]:
+    """Observe today's writing, rewrite the dashboard status file.
+
+    Returns (words today incl. morning pages, done, prompt, morning-pages words by day).
+    """
     today = _today()
-    words = writing.observe(conn, today, writing.count_words(config.WRITING_DIRS))
-    marked = bool(conn.execute("SELECT marked_done FROM writing_days WHERE day = ?", (today.isoformat(),)).fetchone()[0])
-    done = marked or words >= config.WRITING_DONE_WORDS
-    prompt = _prompt_today(today)
+    prose = writing.observe(conn, today, writing.count_words(config.WRITING_DIRS))
+    pages_text, pages_words = _pages_words()
+    words = prose + pages_words.get(today, 0)
+    done = writing.day_done(conn, today, config.WRITING_DONE_WORDS, pages_words, config.MORNING_PAGES_MIN_WORDS)
+    prompt = _prompt_today(today, pages_text)
     panel.write(config.STATUS_FILE, panel.build(
         conn, today, words_today=words, done=done, prompt=prompt, threshold=config.WRITING_DONE_WORDS,
         starters_dir=config.STARTERS_DIR, vault_root=config.BRAINSYNC, art_dir=config.ART_DIR,
+        pages_words=pages_words, pages_min=config.MORNING_PAGES_MIN_WORDS,
     ))
-    return words, done, prompt
+    return words, done, prompt, pages_words
 
 
 @write_app.command("status")
@@ -320,8 +338,8 @@ def write_status(hook: Annotated[bool, typer.Option("--hook", help="Output for a
     """Words written today, the streak, and today's 10-minute prompt if you haven't written yet."""
     conn = _conn()
     today = _today()
-    words, done, prompt = _refresh(conn)
-    days = writing.streak(conn, today, config.WRITING_DONE_WORDS)
+    words, done, prompt, pages_words = _refresh(conn)
+    days = writing.streak(conn, today, config.WRITING_DONE_WORDS, pages_words, config.MORNING_PAGES_MIN_WORDS)
     if done:
         msg = f"Wrote today ({words} words). Streak: {days} day{'s' if days != 1 else ''}."
     else:
@@ -340,11 +358,40 @@ def write_done():
     """Count today as written (for writing that happened outside the vault)."""
     conn = _conn()
     writing.mark_done(conn, _today(), writing.count_words(config.WRITING_DIRS))
-    _refresh(conn)
-    typer.echo(f"Marked. Streak: {writing.streak(conn, _today(), config.WRITING_DONE_WORDS)}.")
+    *_, pages_words = _refresh(conn)
+    days = writing.streak(conn, _today(), config.WRITING_DONE_WORDS, pages_words, config.MORNING_PAGES_MIN_WORDS)
+    typer.echo(f"Marked. Streak: {days}.")
 
 
 @write_app.command("prompt")
 def write_prompt():
     """Just today's prompt."""
     typer.echo(_prompt_today(_today()))
+
+
+@write_app.command("ideas")
+def write_ideas(
+    days: Annotated[int, typer.Option(help="How many days of morning pages to read.")] = 7,
+    dry_run: DryRunOpt = False,
+):
+    """Turn recent morning pages into post starters in blog/starters/from-pages/ (runs Sundays)."""
+    from local_first_common.cli import resolve_provider
+    from local_first_common.providers import PROVIDERS
+
+    today = _today()
+    pages_text, _ = _pages_words()
+    entries = ideas.gather(pages_text, today, days, config.MORNING_PAGES_MIN_WORDS)
+    if not entries:
+        typer.echo(f"No morning pages of {config.MORNING_PAGES_MIN_WORDS}+ words in the last {days} days.")
+        return
+    llm = resolve_provider(PROVIDERS, config.IDEAS_PROVIDER, config.IDEAS_MODEL, fallback=False, tool_name=config.TOOL_NAME)
+    found = ideas.extract(llm, entries)
+    if not found:
+        typer.echo(f"Read {len(entries)} day(s) of pages; nothing that's a post yet.")
+        return
+    for idea, day in found:
+        if dry_run:
+            typer.echo(f"[dry run] {idea.title}  <- “{idea.quote}” ({day})")
+            continue
+        note = ideas.write_starter(idea, day, config.PAGES_STARTERS_DIR, today)
+        typer.echo(f"{'Wrote' if note else 'Already have'}: {idea.title}  <- “{idea.quote}” ({day})")
