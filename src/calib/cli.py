@@ -269,8 +269,9 @@ def art_pending(json_out: JsonOpt = False, limit: Annotated[int, typer.Option()]
     if json_out:
         typer.echo(json.dumps(rows, indent=2))
         return
+    # No self_score or artist here: rating is blind (use /rate-art, which reveals both after).
     for r in rows:
-        typer.echo(f"{r['item']}  self={r['self_score']}  [{r['interest']}]")
+        typer.echo(f"{r['item']}  [{r['interest']}]")
 
 
 @art_app.command("rate")
