@@ -92,8 +92,9 @@ def build(
     threshold: int,
     starters_dir: Path,
     vault_root: Path,
-    art_dir: Path,
+    art_dir: art.ArtDirs,
     pages_words: dict[date, int] | None = None,
+    art_experiment_start: date | None = None,
     pages_min: int = 50,
 ) -> dict:
     pages_words = pages_words or {}
@@ -112,6 +113,7 @@ def build(
         "days": recent_days(conn, today, threshold, pages_words=pages_words, pages_min=pages_min),
         "heatmap": heatmap(conn, today, threshold, pages_words, pages_min),
         "starters": list_starters(starters_dir, vault_root, today),
+        "art_experiment": art.by_artist(art.load_items(art_dir), art_experiment_start) if art_experiment_start else {},
         "reminders": {
             "art_unrated": sum(i.human_score is None for i in art.load_items(art_dir)),
             "predictions_due": len(due),

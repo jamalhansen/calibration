@@ -1,6 +1,7 @@
 """Paths and settings. Override any of them in ~/.config/local-first/calibration.toml."""
 
 import os
+from datetime import date
 from pathlib import Path
 
 from local_first_common.config import get_setting
@@ -17,6 +18,13 @@ DISCOVERY_STORE = _path("discovery_store", "~/sync/content-discovery/store.db")
 BRAINSYNC = _path("brainsync", "~/vaults/BrainSync")
 CONTEXTA = _path("contexta", "~/vaults/Contexta")
 ART_DIR = _path("art_dir", "~/iCloud/ai-artist")
+# 2026-10-01 experiment: same agent code, two folders -- one learns from its own
+# critiques, one from Jamal's ratings. Rated together, blind.
+ART_DIRS = {
+    "self-taught": ART_DIR,
+    "mentored": _path("art_dir_mentored", "~/iCloud/ai-artist-mentored"),
+}
+ART_EXPERIMENT_START = date(2026, 10, 1)
 
 # Where Jamal's own prose lives. Contexta notes are excluded: agents write there too.
 WRITING_DIRS = [BRAINSYNC / "blog", BRAINSYNC / "newsletter"]

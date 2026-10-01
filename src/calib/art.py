@@ -4,8 +4,10 @@ Ratings are 1-5 stars, stored as human_score on the item's 0-1 scale
 ((stars - 1) / 4) so they compare directly with self_score.
 """
 
+import hashlib
 import re
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 from local_first_common.obsidian import parse_frontmatter, split_frontmatter
@@ -21,21 +23,61 @@ class ArtItem:
     interest: str
     self_score: float | None
     human_score: float | None
+    artist: str = ""
+    generated: str = ""
 
 
-def load_items(art_dir: Path) -> list[ArtItem]:
+ArtDirs = Path | dict[str, Path]
+
+
+def _dirs(art_dirs: ArtDirs) -> dict[str, Path]:
+    """One folder (artist named after it) or {artist name: folder}, as of the 2026-10-01 two-artist experiment."""
+    return art_dirs if isinstance(art_dirs, dict) else {art_dirs.name: art_dirs}
+
+
+def load_items(art_dirs: ArtDirs) -> list[ArtItem]:
     items = []
-    for path in sorted((art_dir / "items").glob("*.md"), reverse=True):
-        fm = parse_frontmatter(path)
-        items.append(ArtItem(
-            path=path,
-            image=art_dir / "images" / f"{path.stem}.png",
-            title=str(fm.get("title", path.stem)),
-            interest=str(fm.get("interest", "")),
-            self_score=_float(fm.get("self_score")),
-            human_score=_legacy_scale(_float(fm.get("human_score"))),
-        ))
+    for name, art_dir in _dirs(art_dirs).items():
+        for path in sorted((art_dir / "items").glob("*.md"), reverse=True):
+            fm = parse_frontmatter(path)
+            items.append(ArtItem(
+                path=path,
+                image=art_dir / "images" / f"{path.stem}.png",
+                title=str(fm.get("title", path.stem)),
+                interest=str(fm.get("interest", "")),
+                self_score=_float(fm.get("self_score")),
+                human_score=_legacy_scale(_float(fm.get("human_score"))),
+                artist=str(fm.get("artist") or name),
+                generated=str(fm.get("generated_at") or path.stem)[:10],
+            ))
+    items.sort(key=lambda i: (i.generated, i.path.name), reverse=True)
     return items
+
+
+def blind_order(items: list[ArtItem]) -> list[ArtItem]:
+    """Newest days first, but within a day the order comes from a hash of the filename,
+    so a piece's position never says which artist made it."""
+    return sorted(items, key=lambda i: (i.generated, hashlib.sha256(i.path.name.encode()).hexdigest()), reverse=True)
+
+
+def by_artist(items: list[ArtItem], since: date | None = None) -> dict[str, dict]:
+    """Per artist since the experiment started: pieces made, rated, and your mean stars."""
+    out: dict[str, dict] = {}
+    for i in items:
+        if since and i.generated < since.isoformat():
+            continue
+        a = out.setdefault(i.artist, {"pieces": 0, "rated": 0, "_human": [], "_self": []})
+        a["pieces"] += 1
+        if i.self_score is not None:
+            a["_self"].append(i.self_score)
+        if i.human_score is not None:
+            a["rated"] += 1
+            a["_human"].append(i.human_score)
+    for a in out.values():
+        h, s = a.pop("_human"), a.pop("_self")
+        a["mean_stars"] = round(1 + 4 * sum(h) / len(h), 2) if h else None
+        a["mean_self_stars"] = round(1 + 4 * sum(s) / len(s), 2) if s else None
+    return out
 
 
 def _legacy_scale(value: float | None) -> float | None:
@@ -78,12 +120,12 @@ def rate(path: Path, stars: int, note: str | None = None) -> float:
     return score
 
 
-def resolve_item(art_dir: Path, ref: str) -> Path:
-    """Accept a path, a filename, or a unique fragment of one."""
+def resolve_item(art_dirs: ArtDirs, ref: str) -> Path:
+    """Accept a path, a filename, or a unique fragment of one, across every artist's folder."""
     p = Path(ref).expanduser()
     if p.is_file():
         return p
-    matches = [i for i in (art_dir / "items").glob("*.md") if ref in i.name]
+    matches = [i for d in _dirs(art_dirs).values() for i in (d / "items").glob("*.md") if ref in i.name]
     if len(matches) != 1:
         raise LookupError(f"{len(matches)} items match {ref!r}; be more specific")
     return matches[0]

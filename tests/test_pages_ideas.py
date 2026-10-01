@@ -139,3 +139,36 @@ def test_write_starter_is_an_outline_and_never_overwrites(tmp_path):
 @pytest.mark.parametrize("quote", ["abc", ""])
 def test_too_short_quotes_never_match(quote):
     assert ideas.source_day(quote, ENTRIES) is None
+
+
+def _art(base, stem, day, self_score, human="null", artist=None):
+    from pathlib import Path  # noqa: F401
+
+    (base / "items").mkdir(parents=True, exist_ok=True)
+    who = f"artist: {artist}\n" if artist else ""
+    (base / "items" / f"{stem}.md").write_text(
+        f"---\ngenerated_at: '{day}T06:00:00'\n{who}interest: X\nself_score: {self_score}\nhuman_score: {human}\n---\n"
+        "**Human notes:** _not yet reviewed_\n"
+    )
+
+
+def test_two_artists_load_rate_and_score(tmp_path):
+    from calib import art
+
+    a, m = tmp_path / "ai-artist", tmp_path / "ai-artist-mentored"
+    _art(a, "2026-09-20-old", "2026-09-20", 0.9, human=0.0)  # before the experiment
+    _art(a, "2026-10-02-sunrise", "2026-10-02", 0.5)
+    _art(m, "2026-10-02-market", "2026-10-02", 0.4, artist="mentored")
+    _art(m, "2026-10-01-orbs", "2026-10-01", 0.6, human=0.75)
+    dirs = {"self-taught": a, "mentored": m}
+
+    items = art.load_items(dirs)
+    assert {(i.path.stem, i.artist) for i in items} >= {("2026-10-02-sunrise", "self-taught"), ("2026-10-02-market", "mentored")}
+    order = [i.path.stem for i in art.blind_order(items)]
+    assert order[:2] in (["2026-10-02-sunrise", "2026-10-02-market"], ["2026-10-02-market", "2026-10-02-sunrise"])
+    assert order[2:] == ["2026-10-01-orbs", "2026-09-20-old"]
+
+    art.rate(art.resolve_item(dirs, "sunrise"), 2)
+    exp = art.by_artist(art.load_items(dirs), date(2026, 10, 1))
+    assert exp["self-taught"] == {"pieces": 1, "rated": 1, "mean_stars": 2.0, "mean_self_stars": 3.0}
+    assert exp["mentored"] == {"pieces": 2, "rated": 1, "mean_stars": 4.0, "mean_self_stars": 3.0}

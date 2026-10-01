@@ -262,10 +262,10 @@ def predict_score(json_out: JsonOpt = False):
 
 @art_app.command("pending")
 def art_pending(json_out: JsonOpt = False, limit: Annotated[int, typer.Option()] = 7):
-    """Unrated pieces, newest first."""
-    items = [i for i in art.load_items(config.ART_DIR) if i.human_score is None][:limit]
+    """Unrated pieces from both artists, newest days first, in an order that doesn't reveal the artist."""
+    items = art.blind_order([i for i in art.load_items(config.ART_DIRS) if i.human_score is None])[:limit]
     rows = [{"item": i.path.name, "image": str(i.image), "title": i.title, "interest": i.interest,
-             "self_score": i.self_score} for i in items]
+             "generated": i.generated, "artist": i.artist, "self_score": i.self_score} for i in items]
     if json_out:
         typer.echo(json.dumps(rows, indent=2))
         return
@@ -281,7 +281,7 @@ def art_rate(
 ):
     """Rate a piece 1-5; stored as human_score on the 0-1 scale self_score uses."""
     try:
-        path = art.resolve_item(config.ART_DIR, item)
+        path = art.resolve_item(config.ART_DIRS, item)
         score = art.rate(path, stars, note)
     except (LookupError, ValueError) as e:
         err.print(str(e))
@@ -292,9 +292,17 @@ def art_rate(
 
 @art_app.command("stats")
 def art_stats(json_out: JsonOpt = False):
-    """Your scores against the agent's self-scores."""
-    s = art.stats(art.load_items(config.ART_DIR))
-    typer.echo(json.dumps(s, indent=2) if json_out else "\n".join(f"{k}: {v}" for k, v in s.items()))
+    """Your scores against the agents' self-scores, and the two-artist experiment's scoreboard."""
+    items = art.load_items(config.ART_DIRS)
+    s = art.stats(items)
+    exp = art.by_artist(items, config.ART_EXPERIMENT_START)
+    if json_out:
+        typer.echo(json.dumps({**s, "experiment": exp}, indent=2))
+        return
+    typer.echo("\n".join(f"{k}: {v}" for k, v in s.items()))
+    typer.echo(f"\nexperiment since {config.ART_EXPERIMENT_START} (your mean stars / its own mean stars):")
+    for name, a in exp.items():
+        typer.echo(f"  {name}: {a['pieces']} pieces, {a['rated']} rated, you {a['mean_stars']} / it {a['mean_self_stars']}")
 
 
 # --- writing ---------------------------------------------------------------
@@ -327,8 +335,9 @@ def _refresh(conn) -> tuple[int, bool, str, dict[date, int]]:
     prompt = _prompt_today(today, pages_text)
     panel.write(config.STATUS_FILE, panel.build(
         conn, today, words_today=words, done=done, prompt=prompt, threshold=config.WRITING_DONE_WORDS,
-        starters_dir=config.STARTERS_DIR, vault_root=config.BRAINSYNC, art_dir=config.ART_DIR,
+        starters_dir=config.STARTERS_DIR, vault_root=config.BRAINSYNC, art_dir=config.ART_DIRS,
         pages_words=pages_words, pages_min=config.MORNING_PAGES_MIN_WORDS,
+        art_experiment_start=config.ART_EXPERIMENT_START,
     ))
     return words, done, prompt, pages_words
 
