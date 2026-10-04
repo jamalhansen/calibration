@@ -5,7 +5,6 @@ description = "N=1 calibration study: how well the fleet's LLM scores predict wh
 requires-python = ">=3.12"
 dependencies = [
     "typer>=0.15.0",
-    "click<8.3.2",  # 8.3.2 breaks typer 0.24.1's option parsing (same pin as process-doctor)
     "rich>=14.3.3",
     "requests>=2.32",
     "local-first-common",
