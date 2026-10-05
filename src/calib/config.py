@@ -33,7 +33,7 @@ PROMPTS_DIR = STARTERS_DIR / "from-reading"
 
 STATUS_FILE = _path("status_file", "~/sync/local-first/writing-practice-latest.json")
 
-READWISE_TOKEN =os.environ.get("READWISE_TOKEN", "")
+READWISE_TOKEN = os.environ.get("READWISE_TOKEN", "")
 
 # An item with no engagement stays "pending" this long before it counts as ignored.
 RESOLVE_AFTER_DAYS = int(get_setting(TOOL_NAME, "resolve_after_days", default=14))

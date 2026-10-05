@@ -18,14 +18,26 @@ def slugify(title: str, max_words: int = 8) -> str:
 
 _SECTIONS = {
     "you-loved-it": [
-        ("The hook", "The model scored this {score:.2f}. I {level} it anyway. Start with the moment you decided it was worth your time."),
+        (
+            "The hook",
+            "The model scored this {score:.2f}. I {level} it anyway. Start with the moment you decided it was worth your time.",
+        ),
         ("What the piece says", "Two sentences, in your words, plus the link."),
-        ("Why it landed for me", "What in your work or head made this matter? Be specific: a project, a question you were already carrying."),
-        ("What the model couldn't see", "Relevance to a profile is not the same as interest. Name the gap this item exposes."),
+        (
+            "Why it landed for me",
+            "What in your work or head made this matter? Be specific: a project, a question you were already carrying.",
+        ),
+        (
+            "What the model couldn't see",
+            "Relevance to a profile is not the same as interest. Name the gap this item exposes.",
+        ),
         ("Takeaway", "One line a reader can use, about the topic or about filtering what you read."),
     ],
     "model-loved-it": [
-        ("The hook", "The model scored this {score:.2f} and I never opened it. Start with whether you'd have predicted that."),
+        (
+            "The hook",
+            "The model scored this {score:.2f} and I never opened it. Start with whether you'd have predicted that.",
+        ),
         ("What the piece promised", "Title and summary, as the model saw them."),
         ("Why I skipped it", "Honest answer: wrong week, already knew it, looked like hype, or something else?"),
         ("Who was wrong", "Read it now. Was the model right and you were busy, or was the model wrong? Say which."),

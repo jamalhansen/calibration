@@ -79,16 +79,21 @@ def sync(conn: sqlite3.Connection, fetch: Fetch, full: bool = False) -> int:
                  first_opened_at = excluded.first_opened_at, saved_at = excluded.saved_at,
                  updated_at = excluded.updated_at, tags = excluded.tags""",
             (
-                doc["id"], normalize_url(source_url), source_url, doc.get("title") or "",
-                doc.get("location") or "", float(doc.get("reading_progress") or 0),
-                doc.get("first_opened_at"), doc.get("saved_at"), doc.get("updated_at"),
+                doc["id"],
+                normalize_url(source_url),
+                source_url,
+                doc.get("title") or "",
+                doc.get("location") or "",
+                float(doc.get("reading_progress") or 0),
+                doc.get("first_opened_at"),
+                doc.get("saved_at"),
+                doc.get("updated_at"),
                 json.dumps(_tag_names(doc)),
             ),
         )
         written += 1
     conn.execute(
-        "UPDATE reader_docs SET highlights = "
-        "(SELECT COUNT(*) FROM highlights h WHERE h.parent_id = reader_docs.doc_id)"
+        "UPDATE reader_docs SET highlights = (SELECT COUNT(*) FROM highlights h WHERE h.parent_id = reader_docs.doc_id)"
     )
     set_state(conn, "reader_synced_at", started)
     conn.commit()

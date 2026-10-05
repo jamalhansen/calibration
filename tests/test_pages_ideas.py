@@ -43,7 +43,10 @@ def test_by_day_reads_only_dated_notes_with_pages(tmp_path):
 
 
 def test_last_thought_prefers_trailing_fragment_then_last_sentence():
-    assert pages.last_thought(pages.section_text(NOTE)) == "This is a beginning and I would like it to count for something real"
+    assert (
+        pages.last_thought(pages.section_text(NOTE))
+        == "This is a beginning and I would like it to count for something real"
+    )
     assert pages.last_thought("Short one. This sentence has plenty of words in it to count.") == (
         "This sentence has plenty of words in it to count."
     )
@@ -53,7 +56,10 @@ def test_last_thought_prefers_trailing_fragment_then_last_sentence():
 def test_recent_quote_only_looks_back_a_few_days():
     today = date(2026, 10, 1)
     text = {date(2026, 9, 30): "This is a sentence with more than eight words in it."}
-    assert pages.recent_quote(text, today) == (date(2026, 9, 30), "This is a sentence with more than eight words in it.")
+    assert pages.recent_quote(text, today) == (
+        date(2026, 9, 30),
+        "This is a sentence with more than eight words in it.",
+    )
     assert pages.recent_quote(text, date(2026, 10, 9)) is None
     assert pages.recent_quote({today: "Today's own words should not be quoted back as yesterday."}, today) is None
 
@@ -126,7 +132,9 @@ def test_gather_skips_stubs_and_old_days():
 
 
 def test_write_starter_is_an_outline_and_never_overwrites(tmp_path):
-    note = ideas.write_starter(_idea("None of them felt like mine to write."), date(2026, 9, 30), tmp_path, date(2026, 10, 4))
+    note = ideas.write_starter(
+        _idea("None of them felt like mine to write."), date(2026, 9, 30), tmp_path, date(2026, 10, 4)
+    )
     text = note.read_text()
     assert note == tmp_path / "starters-that-weren-t-mine" / "starters-that-weren-t-mine.md"
     assert "status: outline" in text and "source: morning pages 2026-09-30" in text
@@ -163,7 +171,10 @@ def test_two_artists_load_rate_and_score(tmp_path):
     dirs = {"self-taught": a, "mentored": m}
 
     items = art.load_items(dirs)
-    assert {(i.path.stem, i.artist) for i in items} >= {("2026-10-02-sunrise", "self-taught"), ("2026-10-02-market", "mentored")}
+    assert {(i.path.stem, i.artist) for i in items} >= {
+        ("2026-10-02-sunrise", "self-taught"),
+        ("2026-10-02-market", "mentored"),
+    }
     order = [i.path.stem for i in art.blind_order(items)]
     assert order[:2] in (["2026-10-02-sunrise", "2026-10-02-market"], ["2026-10-02-market", "2026-10-02-sunrise"])
     assert order[2:] == ["2026-10-01-orbs", "2026-09-20-old"]

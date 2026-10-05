@@ -88,7 +88,8 @@ def test_writing_observe_streak_and_done(conn):
     assert writing.streak(conn, d3, 100) == 2
 
 
-OUTLINE = """---
+OUTLINE = (
+    """---
 status: outline
 ---
 # Why Your CSV Is Lying
@@ -96,7 +97,9 @@ status: outline
 ## Question Hook
 
 ## The Problem
-""" + " ".join(["word"] * 50) + """
+"""
+    + " ".join(["word"] * 50)
+    + """
 
 ## The Data
 ```python
@@ -104,6 +107,7 @@ status: outline
 ## not a heading
 ```
 """
+)
 
 
 def test_thin_sections_skip_fences_and_full_sections():

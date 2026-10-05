@@ -6,7 +6,9 @@ from calib import panel
 def _starter(root, group, slug, extra=""):
     d = root / "blog" / "starters" / group / slug
     d.mkdir(parents=True)
-    (d / f"{slug}.md").write_text(f"---\ntitle: {slug}\nstatus: outline\ncreated: 2026-09-29\n{extra}---\n# T\n\n## A\n\n## B\n")
+    (d / f"{slug}.md").write_text(
+        f"---\ntitle: {slug}\nstatus: outline\ncreated: 2026-09-29\n{extra}---\n# T\n\n## A\n\n## B\n"
+    )
 
 
 def test_starters_listed_with_links_and_holds(tmp_path):

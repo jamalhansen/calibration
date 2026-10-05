@@ -38,9 +38,18 @@ def add_item(store: Path, url: str, score: float, status: str = "kept", probed: 
 
 
 def doc(doc_id, url, **kw):
-    base = {"id": doc_id, "source_url": url, "title": doc_id, "category": "article", "location": "later",
-            "reading_progress": 0, "first_opened_at": None, "saved_at": "2026-09-01T00:00:00+00:00",
-            "updated_at": "2026-09-01T00:00:00+00:00", "tags": {}}
+    base = {
+        "id": doc_id,
+        "source_url": url,
+        "title": doc_id,
+        "category": "article",
+        "location": "later",
+        "reading_progress": 0,
+        "first_opened_at": None,
+        "saved_at": "2026-09-01T00:00:00+00:00",
+        "updated_at": "2026-09-01T00:00:00+00:00",
+        "tags": {},
+    }
     base.update(kw)
     return base
 

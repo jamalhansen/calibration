@@ -35,3 +35,6 @@ content-discovery-agent = { path = "../content-discovery-agent" }
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120

@@ -90,9 +90,11 @@ def score(conn: sqlite3.Connection) -> dict:
         hi = lo + 0.2
         group = [r for r in rows if lo <= r["probability"] < hi or (hi >= 1.0 and r["probability"] == 1.0)]
         if group:
-            buckets.append({
-                "said": f"{int(lo * 100)}-{int(hi * 100)}%",
-                "n": len(group),
-                "happened_pct": round(100 * sum(r["outcome"] for r in group) / len(group)),
-            })
+            buckets.append(
+                {
+                    "said": f"{int(lo * 100)}-{int(hi * 100)}%",
+                    "n": len(group),
+                    "happened_pct": round(100 * sum(r["outcome"] for r in group) / len(group)),
+                }
+            )
     return {"n": len(rows), "brier": round(brier, 3), "buckets": buckets}

@@ -40,16 +40,18 @@ def load_items(art_dirs: ArtDirs) -> list[ArtItem]:
     for name, art_dir in _dirs(art_dirs).items():
         for path in sorted((art_dir / "items").glob("*.md"), reverse=True):
             fm = parse_frontmatter(path)
-            items.append(ArtItem(
-                path=path,
-                image=art_dir / "images" / f"{path.stem}.png",
-                title=str(fm.get("title", path.stem)),
-                interest=str(fm.get("interest", "")),
-                self_score=_float(fm.get("self_score")),
-                human_score=_legacy_scale(_float(fm.get("human_score"))),
-                artist=str(fm.get("artist") or name),
-                generated=str(fm.get("generated_at") or path.stem)[:10],
-            ))
+            items.append(
+                ArtItem(
+                    path=path,
+                    image=art_dir / "images" / f"{path.stem}.png",
+                    title=str(fm.get("title", path.stem)),
+                    interest=str(fm.get("interest", "")),
+                    self_score=_float(fm.get("self_score")),
+                    human_score=_legacy_scale(_float(fm.get("human_score"))),
+                    artist=str(fm.get("artist") or name),
+                    generated=str(fm.get("generated_at") or path.stem)[:10],
+                )
+            )
     items.sort(key=lambda i: (i.generated, i.path.name), reverse=True)
     return items
 

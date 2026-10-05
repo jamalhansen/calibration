@@ -11,7 +11,9 @@ def pending_for(conn: sqlite3.Connection, items: list[StudyItem], rater: str, li
     return [i for i in items if i.resolved and i.url_norm not in done][:limit]
 
 
-def score_items(provider, items: list[StudyItem], profile: str, exclusions: str) -> list[tuple[StudyItem, float | None]]:
+def score_items(
+    provider, items: list[StudyItem], profile: str, exclusions: str
+) -> list[tuple[StudyItem, float | None]]:
     from discovery.scorer import ContentDiscoveryScorer, build_user_message
 
     scorer = ContentDiscoveryScorer()

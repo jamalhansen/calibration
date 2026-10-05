@@ -93,10 +93,14 @@ def report(
     if json_out:
         typer.echo(json.dumps(summary, indent=2))
         return
-    console.print(f"[bold]{summary['items']}[/bold] items reached Reader; "
-                  f"{summary['resolved']} resolved, {summary['pending']} still pending.")
-    console.print(f"Engaged (read, highlighted, or noted): routed {_pct(summary['routed_engaged_pct'])}, "
-                  f"probes {_pct(summary['probe_engaged_pct'])} of {summary['probes_resolved']}.")
+    console.print(
+        f"[bold]{summary['items']}[/bold] items reached Reader; "
+        f"{summary['resolved']} resolved, {summary['pending']} still pending."
+    )
+    console.print(
+        f"Engaged (read, highlighted, or noted): routed {_pct(summary['routed_engaged_pct'])}, "
+        f"probes {_pct(summary['probe_engaged_pct'])} of {summary['probes_resolved']}."
+    )
     for rater, value in summary["auc"].items():
         if not rater.endswith("_n"):
             n = summary["auc"].get(f"{rater}_n")
@@ -197,6 +201,7 @@ def daily(dry_run: DryRunOpt = False):
 
 # --- predictions -----------------------------------------------------------
 
+
 @predict_app.command("add")
 def predict_add(
     text: str,
@@ -260,12 +265,23 @@ def predict_score(json_out: JsonOpt = False):
 
 # --- art -------------------------------------------------------------------
 
+
 @art_app.command("pending")
 def art_pending(json_out: JsonOpt = False, limit: Annotated[int, typer.Option()] = 7):
     """Unrated pieces from both artists, newest days first, in an order that doesn't reveal the artist."""
     items = art.blind_order([i for i in art.load_items(config.ART_DIRS) if i.human_score is None])[:limit]
-    rows = [{"item": i.path.name, "image": str(i.image), "title": i.title, "interest": i.interest,
-             "generated": i.generated, "artist": i.artist, "self_score": i.self_score} for i in items]
+    rows = [
+        {
+            "item": i.path.name,
+            "image": str(i.image),
+            "title": i.title,
+            "interest": i.interest,
+            "generated": i.generated,
+            "artist": i.artist,
+            "self_score": i.self_score,
+        }
+        for i in items
+    ]
     if json_out:
         typer.echo(json.dumps(rows, indent=2))
         return
@@ -303,10 +319,13 @@ def art_stats(json_out: JsonOpt = False):
     typer.echo("\n".join(f"{k}: {v}" for k, v in s.items()))
     typer.echo(f"\nexperiment since {config.ART_EXPERIMENT_START} (your mean stars / its own mean stars):")
     for name, a in exp.items():
-        typer.echo(f"  {name}: {a['pieces']} pieces, {a['rated']} rated, you {a['mean_stars']} / it {a['mean_self_stars']}")
+        typer.echo(
+            f"  {name}: {a['pieces']} pieces, {a['rated']} rated, you {a['mean_stars']} / it {a['mean_self_stars']}"
+        )
 
 
 # --- writing ---------------------------------------------------------------
+
 
 def _pages_words() -> tuple[dict[date, str], dict[date, int]]:
     text = pages.by_day(config.TIMELINE_DIR)
@@ -318,7 +337,9 @@ def _prompt_today(today: date, pages_text: dict[date, str] | None = None) -> str
         pages_text, _ = _pages_words()
     prompts = digest.prompts_from_digest(digest.digest_path(config.PROMPTS_DIR, today))
     return writing.pick_prompt(
-        today, prompts, writing.outline_sections(config.BRAINSYNC / "blog"),
+        today,
+        prompts,
+        writing.outline_sections(config.BRAINSYNC / "blog"),
         own_words=pages.recent_quote(pages_text, today),
     )
 
@@ -334,17 +355,30 @@ def _refresh(conn) -> tuple[int, bool, str, dict[date, int]]:
     words = prose + pages_words.get(today, 0)
     done = writing.day_done(conn, today, config.WRITING_DONE_WORDS, pages_words, config.MORNING_PAGES_MIN_WORDS)
     prompt = _prompt_today(today, pages_text)
-    panel.write(config.STATUS_FILE, panel.build(
-        conn, today, words_today=words, done=done, prompt=prompt, threshold=config.WRITING_DONE_WORDS,
-        starters_dir=config.STARTERS_DIR, vault_root=config.BRAINSYNC, art_dir=config.ART_DIRS,
-        pages_words=pages_words, pages_min=config.MORNING_PAGES_MIN_WORDS,
-        art_experiment_start=config.ART_EXPERIMENT_START,
-    ))
+    panel.write(
+        config.STATUS_FILE,
+        panel.build(
+            conn,
+            today,
+            words_today=words,
+            done=done,
+            prompt=prompt,
+            threshold=config.WRITING_DONE_WORDS,
+            starters_dir=config.STARTERS_DIR,
+            vault_root=config.BRAINSYNC,
+            art_dir=config.ART_DIRS,
+            pages_words=pages_words,
+            pages_min=config.MORNING_PAGES_MIN_WORDS,
+            art_experiment_start=config.ART_EXPERIMENT_START,
+        ),
+    )
     return words, done, prompt, pages_words
 
 
 @write_app.command("status")
-def write_status(hook: Annotated[bool, typer.Option("--hook", help="Output for a Claude Code SessionStart hook.")] = False):
+def write_status(
+    hook: Annotated[bool, typer.Option("--hook", help="Output for a Claude Code SessionStart hook.")] = False,
+):
     """Words written today, the streak, and today's 10-minute prompt if you haven't written yet."""
     conn = _conn()
     today = _today()
@@ -394,7 +428,9 @@ def write_ideas(
     if not entries:
         typer.echo(f"No morning pages of {config.MORNING_PAGES_MIN_WORDS}+ words in the last {days} days.")
         return
-    llm = resolve_provider(PROVIDERS, config.IDEAS_PROVIDER, config.IDEAS_MODEL, fallback=False, tool_name=config.TOOL_NAME)
+    llm = resolve_provider(
+        PROVIDERS, config.IDEAS_PROVIDER, config.IDEAS_MODEL, fallback=False, tool_name=config.TOOL_NAME
+    )
     found = ideas.extract(llm, entries)
     if not found:
         typer.echo(f"Read {len(entries)} day(s) of pages; nothing that's a post yet.")

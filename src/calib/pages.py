@@ -54,7 +54,7 @@ def last_thought(text: str, min_words: int = 8, max_chars: int = 220) -> str | N
     or the trailing fragment if the pages stop mid-sentence."""
     flat = " ".join(text.split())
     sentences = [s.strip() for s in _SENTENCE_RE.findall(flat)]
-    tail = flat[sum(len(s) for s in _SENTENCE_RE.findall(flat)):].strip()
+    tail = flat[sum(len(s) for s in _SENTENCE_RE.findall(flat)) :].strip()
     candidates = ([tail] if word_count(tail) >= min_words else []) + sentences[::-1]
     for s in candidates:
         if word_count(s) >= min_words:

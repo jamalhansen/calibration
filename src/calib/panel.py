@@ -28,29 +28,41 @@ def list_starters(starters_dir: Path, vault_root: Path, today: date) -> list[dic
             continue
         ready = str(fm.get("ready_after") or "")[:10]
         _, thin = writing.thin_sections(note.read_text(encoding="utf-8"))
-        out.append({
-            "title": str(fm.get("title") or note.stem),
-            "group": note.parent.parent.name,
-            "created": str(fm.get("created") or "")[:10],
-            "ready_after": ready or None,
-            "held": bool(ready) and ready > today.isoformat(),
-            "sections_left": len(thin),
-            "link": obsidian_link(vault_root, note),
-        })
+        out.append(
+            {
+                "title": str(fm.get("title") or note.stem),
+                "group": note.parent.parent.name,
+                "created": str(fm.get("created") or "")[:10],
+                "ready_after": ready or None,
+                "held": bool(ready) and ready > today.isoformat(),
+                "sections_left": len(thin),
+                "link": obsidian_link(vault_root, note),
+            }
+        )
     out.sort(key=lambda s: (s["held"], s["group"] != "from-building", s["created"]), reverse=False)
     return out
 
 
 def recent_days(
-    conn: sqlite3.Connection, today: date, threshold: int, n: int = 14,
-    pages_words: dict[date, int] | None = None, pages_min: int = 50,
+    conn: sqlite3.Connection,
+    today: date,
+    threshold: int,
+    n: int = 14,
+    pages_words: dict[date, int] | None = None,
+    pages_min: int = 50,
 ) -> list[dict]:
     days = []
     for i in range(n - 1, -1, -1):
         d = today - timedelta(days=i)
         row = conn.execute("SELECT * FROM writing_days WHERE day = ?", (d.isoformat(),)).fetchone()
         tracked = row is not None or d in (pages_words or {})
-        days.append({"day": d.isoformat(), "done": writing.day_done(conn, d, threshold, pages_words, pages_min), "tracked": tracked})
+        days.append(
+            {
+                "day": d.isoformat(),
+                "done": writing.day_done(conn, d, threshold, pages_words, pages_min),
+                "tracked": tracked,
+            }
+        )
     return days
 
 
@@ -58,8 +70,12 @@ HEAT_LEVELS = (1, 100, 250, 500)  # words for levels 1-4; 0 words is level 0
 
 
 def heatmap(
-    conn: sqlite3.Connection, today: date, threshold: int,
-    pages_words: dict[date, int], pages_min: int, weeks: int = 53,
+    conn: sqlite3.Connection,
+    today: date,
+    threshold: int,
+    pages_words: dict[date, int],
+    pages_min: int,
+    weeks: int = 53,
 ) -> list[dict]:
     """GitHub-style year: one entry per day from a Sunday `weeks` back through today.
 

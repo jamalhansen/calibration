@@ -77,8 +77,9 @@ def load_items(
     disc.row_factory = sqlite3.Row
     has_probe = any(r[1] == "probed_at" for r in disc.execute("PRAGMA table_info(items)"))
     if has_probe:
-        query = ("SELECT url, title, description, score, probed_at FROM items "
-                 "WHERE status = 'kept' OR probed_at IS NOT NULL")
+        query = (
+            "SELECT url, title, description, score, probed_at FROM items WHERE status = 'kept' OR probed_at IS NOT NULL"
+        )
     else:
         query = "SELECT url, title, description, score, NULL AS probed_at FROM items WHERE status = 'kept'"
     rows = disc.execute(query).fetchall()
@@ -95,11 +96,18 @@ def load_items(
         if doc is None:
             continue
         level, engagement = classify(doc, key in noted_urls, now, resolve_after_days)
-        items.append(StudyItem(
-            url_norm=key, title=row["title"], score=float(row["score"]),
-            probe=row["probed_at"] is not None, saved_at=doc["saved_at"] or "",
-            level=level, engagement=engagement, description=row["description"] or "",
-        ))
+        items.append(
+            StudyItem(
+                url_norm=key,
+                title=row["title"],
+                score=float(row["score"]),
+                probe=row["probed_at"] is not None,
+                saved_at=doc["saved_at"] or "",
+                level=level,
+                engagement=engagement,
+                description=row["description"] or "",
+            )
+        )
     return items
 
 
@@ -122,12 +130,14 @@ def band_table(items: list[StudyItem]) -> list[dict]:
         group = [i for i in items if i.resolved and lo <= i.score < hi]
         if not group:
             continue
-        out.append({
-            "band": f"{lo:.2f}-{min(hi, 1.0):.2f}",
-            "n": len(group),
-            "engaged_pct": round(100 * sum(i.engagement >= ENGAGED for i in group) / len(group)),
-            "mean_engagement": round(sum(i.engagement for i in group) / len(group), 2),
-        })
+        out.append(
+            {
+                "band": f"{lo:.2f}-{min(hi, 1.0):.2f}",
+                "n": len(group),
+                "engaged_pct": round(100 * sum(i.engagement >= ENGAGED for i in group) / len(group)),
+                "mean_engagement": round(sum(i.engagement for i in group) / len(group), 2),
+            }
+        )
     return out
 
 
