@@ -32,6 +32,15 @@ def test_section_text_strips_callout_and_stops_at_next_section():
     assert "[!pencil]" not in text and "Not morning pages" not in text and "Tasks" not in text
 
 
+def test_prose_typed_onto_the_callout_line_counts():
+    """2026-10-07: the first paragraph replaced the template title on the `[!pencil]-` line
+    and 137 of 182 words went uncounted; only the template's own title is dropped."""
+    note = "## ✍️ Morning Pages\n> [!pencil]- I started writing right here on the marker line.\n> Second paragraph.\n"
+    assert pages.section_text(note) == "I started writing right here on the marker line.\nSecond paragraph."
+    titled = "## ✍️ Morning Pages\n> [!pencil]- Click to expand stream-of-consciousness writing\n> Real words.\n"
+    assert pages.section_text(titled) == "Real words."
+
+
 def test_empty_callout_is_empty():
     assert pages.section_text("## ✍️ Morning Pages\n> [!pencil]- Click to expand\n> \n\n---\n") == ""
 

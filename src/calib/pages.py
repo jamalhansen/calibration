@@ -9,6 +9,12 @@ from datetime import date
 from pathlib import Path
 
 _HEADING_RE = re.compile(r"^##\s.*morning pages", re.IGNORECASE)
+# `> [!pencil]- Click to expand ...` is the daily-note template's callout line. Text after
+# the marker is normally the template's title, not writing -- but on 2026-10-07 the first
+# paragraph was typed onto that line and 137 words went uncounted, so only the template
+# title is dropped; anything else on the marker line is prose.
+_CALLOUT_RE = re.compile(r"^\[![^\]]*\][-+]?\s*")
+_TEMPLATE_TITLE = "Click to expand"
 _DAY_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\.md$")
 _SENTENCE_RE = re.compile(r"[^.!?]+[.!?]")
 
@@ -25,8 +31,11 @@ def section_text(note_text: str) -> str:
         if inside:
             line = raw.lstrip()
             line = line[1:].lstrip() if line.startswith(">") else line
-            if not line.startswith("[!"):
-                lines.append(line)
+            if line.startswith("[!"):
+                line = _CALLOUT_RE.sub("", line)
+                if line.startswith(_TEMPLATE_TITLE):
+                    continue
+            lines.append(line)
     return "\n".join(lines).strip()
 
 
