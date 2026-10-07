@@ -54,13 +54,15 @@ def doc(doc_id, url, **kw):
     return base
 
 
-def fake_fetch(pages: list[list[dict]]):
-    calls = []
+class _FakeFetch:
+    def __init__(self, pages: list[list[dict]]):
+        self.pages, self.calls = pages, []
 
-    def fetch(params):
-        calls.append(dict(params))
-        i = len(calls) - 1
-        return {"results": pages[i], "nextPageCursor": f"c{i + 1}" if i + 1 < len(pages) else None}
+    def __call__(self, params):
+        self.calls.append(dict(params))
+        i = len(self.calls) - 1
+        return {"results": self.pages[i], "nextPageCursor": f"c{i + 1}" if i + 1 < len(self.pages) else None}
 
-    fetch.calls = calls
-    return fetch
+
+def fake_fetch(pages: list[list[dict]]) -> _FakeFetch:
+    return _FakeFetch(pages)

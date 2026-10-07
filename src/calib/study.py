@@ -36,6 +36,12 @@ class StudyItem:
     def resolved(self) -> bool:
         return self.engagement is not None
 
+    @property
+    def resolved_engagement(self) -> float:
+        """engagement, for an item already filtered to resolved ones."""
+        assert self.engagement is not None, "only resolved items have engagement"
+        return self.engagement
+
 
 def classify(doc: sqlite3.Row, noted: bool, now: datetime, resolve_after_days: int) -> tuple[str, float | None]:
     tags = set(json.loads(doc["tags"] or "[]"))
@@ -134,8 +140,8 @@ def band_table(items: list[StudyItem]) -> list[dict]:
             {
                 "band": f"{lo:.2f}-{min(hi, 1.0):.2f}",
                 "n": len(group),
-                "engaged_pct": round(100 * sum(i.engagement >= ENGAGED for i in group) / len(group)),
-                "mean_engagement": round(sum(i.engagement for i in group) / len(group), 2),
+                "engaged_pct": round(100 * sum(i.resolved_engagement >= ENGAGED for i in group) / len(group)),
+                "mean_engagement": round(sum(i.resolved_engagement for i in group) / len(group), 2),
             }
         )
     return out
@@ -150,11 +156,11 @@ def summarize(items: list[StudyItem], rescores: dict[str, dict[str, float]] | No
         levels[i.level] = levels.get(i.level, 0) + 1
 
     def rate(group: list[StudyItem]) -> float | None:
-        return round(100 * sum(i.engagement >= ENGAGED for i in group) / len(group)) if group else None
+        return round(100 * sum(i.resolved_engagement >= ENGAGED for i in group) / len(group)) if group else None
 
-    raters = {"claude": auc([(i.score, i.engagement >= ENGAGED) for i in resolved])}
+    raters = {"claude": auc([(i.score, i.resolved_engagement >= ENGAGED) for i in resolved])}
     for rater, scores in (rescores or {}).items():
-        pairs = [(scores[i.url_norm], i.engagement >= ENGAGED) for i in resolved if i.url_norm in scores]
+        pairs = [(scores[i.url_norm], i.resolved_engagement >= ENGAGED) for i in resolved if i.url_norm in scores]
         raters[rater] = auc(pairs)
         raters[f"{rater}_n"] = len(pairs)
 
@@ -174,7 +180,7 @@ def summarize(items: list[StudyItem], rescores: dict[str, dict[str, float]] | No
 def disagreements(items: list[StudyItem], since: datetime, limit: int = 3) -> list[tuple[str, StudyItem]]:
     """The week's sharpest splits between the model and Jamal, for writing prompts."""
     recent = [i for i in items if i.resolved and (_parse(i.saved_at) or since) >= since]
-    loved_low = sorted((i for i in recent if i.engagement >= ENGAGED), key=lambda i: i.score)
+    loved_low = sorted((i for i in recent if i.resolved_engagement >= ENGAGED), key=lambda i: i.score)
     ignored_high = sorted((i for i in recent if i.engagement == 0), key=lambda i: -i.score)
     picks = []
     for a, b in zip_longest(loved_low, ignored_high):

@@ -1,6 +1,8 @@
 from datetime import date, timedelta
+from typing import Any, ClassVar
 
 import pytest
+from local_first_common.providers.base import BaseProvider
 
 from calib import ideas, pages, panel, writing
 
@@ -100,13 +102,27 @@ def _idea(quote):
     )
 
 
-class FakeProvider:
+class FakeProvider(BaseProvider):
+    """Returns a preset result as-is (no validation), recording each call."""
+
+    provider_name = "fake"
+    default_model = "fake"
+    known_models: ClassVar[list[str]] = ["fake"]
+    models_url = ""
+
     def __init__(self, result):
+        super().__init__()
         self.result, self.calls = result, []
 
-    def complete(self, system, user, response_model=None):
+    def complete(self, system, user, response_model=None, images=None, max_retries=1, rate_limit_retries=3) -> Any:
         self.calls.append((system, user, response_model))
         return self.result
+
+    def _complete(self, system, user, response_model=None, images=None):
+        raise NotImplementedError
+
+    async def _acomplete(self, system, user, response_model=None, images=None):
+        raise NotImplementedError
 
 
 def test_extract_keeps_only_verbatim_quotes():
@@ -135,6 +151,7 @@ def test_write_starter_is_an_outline_and_never_overwrites(tmp_path):
     note = ideas.write_starter(
         _idea("None of them felt like mine to write."), date(2026, 9, 30), tmp_path, date(2026, 10, 4)
     )
+    assert note is not None
     text = note.read_text()
     assert note == tmp_path / "starters-that-weren-t-mine" / "starters-that-weren-t-mine.md"
     assert "status: outline" in text and "source: morning pages 2026-09-30" in text
@@ -149,7 +166,7 @@ def test_too_short_quotes_never_match(quote):
     assert ideas.source_day(quote, ENTRIES) is None
 
 
-def _art(base, stem, day, self_score, human="null", artist=None):
+def _art(base, stem, day, self_score, human: float | str = "null", artist=None):
     from pathlib import Path  # noqa: F401
 
     (base / "items").mkdir(parents=True, exist_ok=True)

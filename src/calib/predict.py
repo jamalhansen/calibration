@@ -19,7 +19,8 @@ def add(conn: sqlite3.Connection, text: str, probability: float, due: date, post
         (text, probability, datetime.now(UTC).isoformat(), due.isoformat(), post),
     )
     conn.commit()
-    return int(cur.lastrowid)
+    assert cur.lastrowid is not None  # set by the INSERT just above
+    return cur.lastrowid
 
 
 def resolve(conn: sqlite3.Connection, pid: int, outcome: bool) -> None:

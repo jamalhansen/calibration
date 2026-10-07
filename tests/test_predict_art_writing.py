@@ -162,6 +162,7 @@ def test_disagreement_starter_is_an_outline_and_never_overwrites(tmp_path):
     assert sections[0] == "The hook" and len(sections) == 5
     path = starters.write_starter(tmp_path, slug, text)
     assert path == tmp_path / slug / f"{slug}.md"
+    assert path is not None
     path.write_text("my own words")
     assert starters.write_starter(tmp_path, slug, text) is None
     assert path.read_text() == "my own words"
