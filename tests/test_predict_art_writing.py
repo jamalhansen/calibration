@@ -91,6 +91,7 @@ def test_writing_observe_streak_and_done(conn):
 OUTLINE = (
     """---
 status: outline
+category: '[[Blog Post]]'
 ---
 # Why Your CSV Is Lying
 
@@ -183,6 +184,9 @@ def test_prompt_sections_put_drafts_before_outlines_even_when_older(tmp_path):
     draft = tmp_path / "draft.md"
     draft.write_text(OUTLINE.replace("status: outline", "status: draft"))
     (tmp_path / "editing.md").write_text(OUTLINE.replace("status: outline", "status: editing"))
+    (tmp_path / "promo.md").write_text(
+        OUTLINE.replace("status: outline", "status: draft").replace("[[Blog Post]]", "[[Promo File]]")
+    )
     outline = tmp_path / "outline.md"
     outline.write_text(OUTLINE)
     os.utime(draft, (1_700_000_000, 1_700_000_000))  # oldest file on disk
@@ -248,6 +252,8 @@ def test_list_drafts_finds_started_work_newest_first(tmp_path):
     untouched = blog / "starters" / "from-building" / "untouched.md"
     untouched.write_text(DRAFT.format(title="Untouched", status="outline", body="*prompt only*"))
     (blog / "note.md").write_text("---\ncategory: '[[Meta]]'\nstatus: draft\n---\nNot a post.")
+    (blog / "series").mkdir()
+    (blog / "series" / "01.md").write_text(DRAFT.format(title="Series outline", status="outline", body="Tool prose."))
     os.utime(draft, (1_700_000_000, 1_700_000_000))
     got = writing.list_drafts(blog, today=date(2026, 10, 10))
     assert [d.title for d in got] == ["Started", "Draft"]

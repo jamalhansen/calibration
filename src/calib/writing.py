@@ -187,6 +187,8 @@ def prompt_sections(blog_dir: Path, recent: int = 3, today: date | None = None) 
     for path in blog_dir.rglob("*.md"):
         text = path.read_text(encoding="utf-8")
         fm, _ = parse_frontmatter_text(text)
+        if not _is_blog_post(fm):  # promo files and series indexes are drafts too, but not posts
+            continue
         status = str(fm.get("status", "")).lower()
         if status in DRAFT_STATUSES:
             bucket = drafts
@@ -225,7 +227,9 @@ def list_drafts(blog_dir: Path, today: date | None = None) -> list[Draft]:
     """Posts in progress under blog/: drafts and editing posts, plus outlines he has started writing in.
 
     Answers "which starters did I draft but never finish or publish?" Published and reference
-    notes are left out. Most recently touched first.
+    notes are left out, and the outline rule only applies under blog/starters/: the dropped
+    series under blog/series/ hold 33 tool-written outlines with prose he never touched.
+    Most recently touched first.
     """
     today = today or date.today()  # noqa: DTZ011 - local calendar date is the intent
     out = []
@@ -238,9 +242,10 @@ def list_drafts(blog_dir: Path, today: date | None = None) -> list[Draft]:
         if not _is_blog_post(fm):
             continue
         status = str(fm.get("status", "")).lower()
-        # An outline's bullets and prompts are skeleton wherever it lives; only his prose counts.
-        words = prose_words(text, starter=status == "outline" or "starters" in path.relative_to(blog_dir).parts)
-        if status not in DRAFT_STATUSES and not (status == "outline" and words > 0):
+        is_starter = "starters" in path.relative_to(blog_dir).parts
+        # An outline's bullets and prompts are skeleton; only his prose counts.
+        words = prose_words(text, starter=status == "outline" or is_starter)
+        if status not in DRAFT_STATUSES and not (status == "outline" and is_starter and words > 0):
             continue
         title, sections = section_words(text)
         edited = datetime.fromtimestamp(path.stat().st_mtime).astimezone().date()
