@@ -44,4 +44,7 @@ TIMELINE_DIR = BRAINSYNC / "timeline"
 MORNING_PAGES_MIN_WORDS = int(get_setting(TOOL_NAME, "morning_pages_min_words", default=50))
 PAGES_STARTERS_DIR = STARTERS_DIR / "from-pages"
 IDEAS_PROVIDER = str(get_setting(TOOL_NAME, "ideas_provider", default="claude-code"))
+# Off since 2026-10-10: the one-outline-per-disagreement starters were other people's ideas
+# handed back, and none of the eight written was ever touched. The digest note still runs.
+DIGEST_STARTERS = str(get_setting(TOOL_NAME, "digest_starters", default=False)).lower() in ("1", "true", "yes")
 IDEAS_MODEL = str(get_setting(TOOL_NAME, "ideas_model", default="sonnet"))

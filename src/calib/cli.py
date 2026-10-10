@@ -131,11 +131,21 @@ def digest_cmd(dry_run: DryRunOpt = False, no_sync: Annotated[bool, typer.Option
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
     typer.echo(f"Wrote {len(picks)} disagreements to {path}")
+    for written in _digest_starters(picks, today, config.DIGEST_STARTERS):
+        typer.echo(f"  starter: {written}")
+
+
+def _digest_starters(picks: list[tuple[str, study.StudyItem]], today: date, enabled: bool) -> list:
+    """One outline starter per disagreement, only when `digest_starters` is on in calibration.toml."""
+    if not enabled:
+        return []
+    written = []
     for kind, item in picks:
         slug, starter = starters.disagreement_starter(kind, item, today)
-        written = starters.write_starter(config.PROMPTS_DIR, slug, starter)
-        if written:
-            typer.echo(f"  starter: {written}")
+        path = starters.write_starter(config.PROMPTS_DIR, slug, starter)
+        if path:
+            written.append(path)
+    return written
 
 
 @app.command("rescore")
@@ -332,15 +342,18 @@ def _pages_words() -> tuple[dict[date, str], dict[date, int]]:
     return text, {d: pages.word_count(t) for d, t in text.items()}
 
 
-def _prompt_today(today: date, pages_text: dict[date, str] | None = None) -> str:
-    if pages_text is None:
-        pages_text, _ = _pages_words()
+def _prompt_today(
+    today: date, pages_text: dict[date, str] | None = None, pages_words: dict[date, int] | None = None
+) -> str:
+    if pages_text is None or pages_words is None:
+        pages_text, pages_words = _pages_words()
     prompts = digest.prompts_from_digest(digest.digest_path(config.PROMPTS_DIR, today))
     return writing.pick_prompt(
         today,
         prompts,
-        writing.outline_sections(config.BRAINSYNC / "blog"),
+        writing.prompt_sections(config.BRAINSYNC / "blog", today=today),
         own_words=pages.recent_quote(pages_text, today),
+        pages_done=pages_words.get(today, 0) >= config.MORNING_PAGES_MIN_WORDS,
     )
 
 
@@ -354,7 +367,7 @@ def _refresh(conn) -> tuple[int, bool, str, dict[date, int]]:
     pages_text, pages_words = _pages_words()
     words = prose + pages_words.get(today, 0)
     done = writing.day_done(conn, today, config.WRITING_DONE_WORDS, pages_words, config.MORNING_PAGES_MIN_WORDS)
-    prompt = _prompt_today(today, pages_text)
+    prompt = _prompt_today(today, pages_text, pages_words)
     panel.write(
         config.STATUS_FILE,
         panel.build(
@@ -411,6 +424,45 @@ def write_done():
 def write_prompt():
     """Just today's prompt."""
     typer.echo(_prompt_today(_today()))
+
+
+@write_app.command("drafts")
+def write_drafts(json_out: JsonOpt = False):
+    """Posts you started but haven't finished or published: drafts, and outlines you wrote prose in."""
+    today = _today()
+    blog = config.BRAINSYNC / "blog"
+    drafts = writing.list_drafts(blog, today)
+    if json_out:
+        rows = [
+            {
+                "path": d.note.relative_to(blog).as_posix(),
+                "title": d.title,
+                "status": d.status,
+                "prose_words": d.prose_words,
+                "thin_sections": d.thin_sections,
+                "markers": d.markers,
+                "days_since_edit": d.days_since_edit,
+            }
+            for d in drafts
+        ]
+        typer.echo(json.dumps(rows, indent=2))
+        return
+    if not drafts:
+        typer.echo("No posts in progress under blog/.")
+        return
+    table = Table(title=f"{len(drafts)} post{'s' if len(drafts) != 1 else ''} in progress (newest edit first)")
+    for col in ("Post", "Status", "Prose", "Thin sections", "Open markers", "Last edit"):
+        table.add_column(col)
+    for d in drafts:
+        table.add_row(
+            f"{d.title}\n[dim]{d.note.relative_to(blog).as_posix()}[/dim]",
+            d.status,
+            str(d.prose_words),
+            str(d.thin_sections),
+            str(d.markers),
+            f"{d.days_since_edit}d ago",
+        )
+    console.print(table)
 
 
 @write_app.command("ideas")

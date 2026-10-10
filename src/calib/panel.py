@@ -43,6 +43,23 @@ def list_starters(starters_dir: Path, vault_root: Path, today: date) -> list[dic
     return out
 
 
+def list_drafts(blog_dir: Path, vault_root: Path, today: date) -> list[dict]:
+    """Posts in progress for the dashboard: what he drafted but hasn't finished or published."""
+    return [
+        {
+            "title": d.title,
+            "status": d.status,
+            "path": d.note.relative_to(blog_dir).as_posix(),
+            "prose_words": d.prose_words,
+            "thin_sections": d.thin_sections,
+            "markers": d.markers,
+            "days_since_edit": d.days_since_edit,
+            "link": obsidian_link(vault_root, d.note),
+        }
+        for d in writing.list_drafts(blog_dir, today)
+    ]
+
+
 def recent_days(
     conn: sqlite3.Connection,
     today: date,
@@ -129,6 +146,7 @@ def build(
         "days": recent_days(conn, today, threshold, pages_words=pages_words, pages_min=pages_min),
         "heatmap": heatmap(conn, today, threshold, pages_words, pages_min),
         "starters": list_starters(starters_dir, vault_root, today),
+        "drafts": list_drafts(vault_root / "blog", vault_root, today),
         "art_experiment": art.by_artist(art.load_items(art_dir), art_experiment_start) if art_experiment_start else {},
         "reminders": {
             "art_unrated": sum(i.human_score is None for i in art.load_items(art_dir)),

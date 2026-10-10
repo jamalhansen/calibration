@@ -117,7 +117,7 @@ def test_thin_sections_skip_fences_and_full_sections():
 
 
 def test_pick_prompt_alternates(tmp_path):
-    sec = [writing.Section(tmp_path / "post.md", "Post", "Hook")]
+    sec = [writing.Section(tmp_path / "post.md", "Post", "Hook", 0)]
     even, odd = date(2026, 10, 3), date(2026, 10, 2)
     assert even.toordinal() % 2 == 0
     assert "disagreement" in writing.pick_prompt(even, ["A title"], sec)
@@ -168,13 +168,86 @@ def test_disagreement_starter_is_an_outline_and_never_overwrites(tmp_path):
     assert path.read_text() == "my own words"
 
 
-def test_outline_sections_skip_not_ready(tmp_path):
+def test_prompt_sections_skip_not_ready(tmp_path):
     (tmp_path / "a.md").write_text(OUTLINE)
     (tmp_path / "b.md").write_text(OUTLINE.replace("status: outline", "status: outline\nready_after: 2026-11-01"))
-    notes = {s.note.name for s in writing.outline_sections(tmp_path, today=date(2026, 10, 1))}
+    notes = {s.note.name for s in writing.prompt_sections(tmp_path, today=date(2026, 10, 1))}
     assert notes == {"a.md"}
-    notes = {s.note.name for s in writing.outline_sections(tmp_path, today=date(2026, 11, 2))}
+    notes = {s.note.name for s in writing.prompt_sections(tmp_path, today=date(2026, 11, 2))}
     assert notes == {"a.md", "b.md"}
+
+
+def test_prompt_sections_put_drafts_before_outlines_even_when_older(tmp_path):
+    import os
+
+    draft = tmp_path / "draft.md"
+    draft.write_text(OUTLINE.replace("status: outline", "status: draft"))
+    (tmp_path / "editing.md").write_text(OUTLINE.replace("status: outline", "status: editing"))
+    outline = tmp_path / "outline.md"
+    outline.write_text(OUTLINE)
+    os.utime(draft, (1_700_000_000, 1_700_000_000))  # oldest file on disk
+    os.utime(outline, (1_900_000_000, 1_900_000_000))  # newest
+    order = []
+    for s in writing.prompt_sections(tmp_path, today=date(2026, 10, 10)):
+        if s.note.name not in order:
+            order.append(s.note.name)
+    assert order == ["editing.md", "draft.md", "outline.md"]
+    assert all(s.words < writing.THIN_SECTION_WORDS for s in writing.prompt_sections(tmp_path))
+
+
+def test_pick_prompt_after_pages_offers_thinnest_section_of_newest_draft(tmp_path):
+    newest, older = tmp_path / "new.md", tmp_path / "old.md"
+    sections = [
+        writing.Section(newest, "New", "Fuller", 30),
+        writing.Section(newest, "New", "Empty", 0),
+        writing.Section(older, "Old", "Emptier", 0),
+    ]
+    own = (date(2026, 10, 9), "a thought")
+    today = date(2026, 10, 10)
+    assert "Keep going" in writing.pick_prompt(today, [], sections, own_words=own)
+    done = writing.pick_prompt(today, [], sections, own_words=own, pages_done=True)
+    assert done.startswith("Pages done.") and "Empty" in done and "Emptier" not in done
+    # pages done but nothing to write into: the usual rotation, never "keep going"
+    assert "seed" in writing.pick_prompt(today, [], [], own_words=own, pages_done=True)
+
+
+DRAFT = """---
+title: {title}
+category: '[[Blog Post]]'
+status: {status}
+---
+## Hook
+
+{body}
+
+## Data
+
+<!-- TODO Jamal: numbers -->
+> [!todo] find the chart
+"""
+
+
+def test_list_drafts_finds_started_work_newest_first(tmp_path):
+    import os
+
+    blog = tmp_path / "blog"
+    (blog / "posts").mkdir(parents=True)
+    (blog / "starters" / "from-building" / "s").mkdir(parents=True)
+    done = blog / "posts" / "live.md"
+    done.write_text(DRAFT.format(title="Live", status="published", body="Prose."))
+    draft = blog / "posts" / "draft.md"
+    draft.write_text(DRAFT.format(title="Draft", status="draft", body="Some real prose here."))
+    started = blog / "starters" / "from-building" / "s" / "s.md"
+    started.write_text(DRAFT.format(title="Started", status="outline", body="I began writing this one."))
+    untouched = blog / "starters" / "from-building" / "untouched.md"
+    untouched.write_text(DRAFT.format(title="Untouched", status="outline", body="*prompt only*"))
+    (blog / "note.md").write_text("---\ncategory: '[[Meta]]'\nstatus: draft\n---\nNot a post.")
+    os.utime(draft, (1_700_000_000, 1_700_000_000))
+    got = writing.list_drafts(blog, today=date(2026, 10, 10))
+    assert [d.title for d in got] == ["Started", "Draft"]
+    d = next(x for x in got if x.title == "Draft")
+    assert (d.status, d.prose_words, d.thin_sections, d.markers) == ("draft", 4, 2, 2)
+    assert d.days_since_edit > 1000 and got[0].days_since_edit == 0
 
 
 def test_prose_words_ignores_skeletons():
@@ -192,3 +265,16 @@ def test_count_words_treats_starters_folder_as_skeletons(tmp_path):
     (blog / "starters" / "from-building" / "s" / "s.md").write_text("- fact one\n\nMine.\n")
     (blog / "post.md").write_text("- a bullet\n\nProse words.\n")
     assert writing.count_words([blog]) == 1 + 5
+
+
+def test_digest_starters_only_when_enabled(tmp_path, monkeypatch):
+    from calib import cli, config
+
+    monkeypatch.setattr(config, "PROMPTS_DIR", tmp_path)
+    item = study.StudyItem("https://x.com/a", "A great post", 0.2, True, "2026-09-28", "noted", 1.0)
+    picks = [("you-loved-it", item)]
+    assert config.DIGEST_STARTERS is False
+    assert cli._digest_starters(picks, date(2026, 10, 11), enabled=False) == []
+    assert not list(tmp_path.rglob("*.md"))
+    written = cli._digest_starters(picks, date(2026, 10, 11), enabled=True)
+    assert len(written) == 1 and written[0].exists()

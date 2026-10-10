@@ -30,3 +30,14 @@ def test_recent_days_marks_untracked(conn):
         {"day": "2026-09-29", "done": False, "tracked": False},
         {"day": "2026-09-30", "done": True, "tracked": True},
     ]
+
+
+def test_drafts_listed_with_links(tmp_path):
+    vault = tmp_path / "BrainSync"
+    d = vault / "blog" / "posts" / "2026" / "10" / "p"
+    d.mkdir(parents=True)
+    (d / "p.md").write_text("---\ntitle: P\ncategory: '[[Blog Post]]'\nstatus: draft\n---\n## A\n\nTODO words\n")
+    got = panel.list_drafts(vault / "blog", vault, date(2026, 10, 10))
+    assert got[0]["title"] == "P" and got[0]["status"] == "draft" and got[0]["markers"] == 1
+    assert got[0]["path"] == "posts/2026/10/p/p.md"
+    assert got[0]["link"] == "obsidian://open?vault=BrainSync&file=blog/posts/2026/10/p/p"

@@ -30,13 +30,13 @@ Discovery's own `kept`/`dismissed` history is the score threshold, not a human j
 
 ```bash
 calib report                 # model score vs your engagement, by score band, AUC per rater
-calib digest                 # this week's sharpest disagreements -> BrainSync/blog/starters/from-reading/ (plus one outline starter per disagreement)
+calib digest                 # this week's sharpest disagreements -> BrainSync/blog/starters/from-reading/ (set digest_starters = true in calibration.toml to also get one outline starter per disagreement; off since 2026-10-10)
 calib rescore -p ollama -m @fast --limit 50   # third rater; then `calib report --no-sync`
 calib yield                  # monthly funnel: surfaced -> opened -> read -> highlighted -> noted, + seeds, posts
 calib predict add "DuckDB post 3 ships" 70 --due 2026-10-05 --post 03-why-your-csv
 calib predict list | resolve <id> yes|no | score
 calib art pending | rate <item> <1-5> [--note ...] | stats
-calib write status | done | prompt
+calib write status | done | prompt | drafts   # drafts: posts you started but haven't finished or published
 calib daily                  # the scheduled job
 ```
 
@@ -45,7 +45,7 @@ Claude Code skills wrap the two interactive pieces: `/rate-art` (blind 1-5 ratin
 ## Wiring
 
 - `com.localfirst.calibration` runs `calib daily` at 03:30: writing baseline, Reader sync, auto-resolving post predictions; on Sundays it also writes the digest. Log: `~/sync/local-first/calibration.log`.
-- A Claude Code `SessionStart` hook runs `calib write status --hook`. Until you've written 100 words today in `BrainSync/blog` or `BrainSync/newsletter` (or run `calib write done`), each session opens with the day's 10-minute prompt: alternately a disagreement from the digest or a thin section of one of your three most recently touched outlines.
-- Dashboard: every writing command (and `com.localfirst.writing-status`, every 30 minutes) writes `~/sync/local-first/writing-practice-latest.json`, which fleet-dashboard-service shows as the **Writing practice** card at the top of the page (and in the phone snapshot): today's prompt, streak, starters as Obsidian links, and reminders for `/rate-art` and `/predict`.
+- A Claude Code `SessionStart` hook runs `calib write status --hook`. Until you've written 100 words today in `BrainSync/blog` or `BrainSync/newsletter` (or run `calib write done`), each session opens with the day's 10-minute prompt: once today's morning pages are done, the thinnest section of your newest draft; before that, yesterday's last thought from the pages, or alternately a disagreement from the digest and a thin section of one of your three most recently touched drafts or outlines (drafts first).
+- Dashboard: every writing command (and `com.localfirst.writing-status`, every 30 minutes) writes `~/sync/local-first/writing-practice-latest.json`, which fleet-dashboard-service shows as the **Writing practice** card at the top of the page (and in the phone snapshot): today's prompt, streak, posts in progress (`calib write drafts`: status, prose words, thin sections, open TODO markers, days since the last edit), starters as Obsidian links, and reminders for `/rate-art` and `/predict`.
 - Post starters: `BrainSync/blog/starters/` (see its `_README.md`). Word counts ignore skeleton text, so generated starters never count as writing.
 - Data: `~/sync/calibration/calibration.db` (picked up by `backup-local-first`). Paths are overridable in `~/.config/local-first/calibration.toml`.
