@@ -50,19 +50,22 @@ def disagreement_starter(kind: str, item: StudyItem, today: date) -> tuple[str, 
     """(slug, markdown) for one digest pick."""
     slug = slugify(item.title)
     year, week, _ = today.isocalendar()
+    # Same fields and order as templates/Blog Post.md; no body H1 (Hugo prints the title).
+    description = (item.description or "").strip().replace(chr(34), chr(39))
     lines = [
         "---",
         f'title: "{item.title.replace(chr(34), chr(39))}"',
+        f'description: "{description}"',
+        "author:",
+        "- Jamal Hansen",
+        "tags: []",
         "status: outline",
         f"created: {today.isoformat()}",
         "category: '[[Blog Post]]'",
         f"slug: {slug}",
-        "tags: []",
         f"origin: calib digest {year}-W{week:02d} ({kind})",
         f"inspired_by: {item.url_norm}",
         "---",
-        "",
-        f"# {item.title}",
         "",
         (
             f"> Starter from the calibration study. Model score {item.score:.2f}; you: {item.level}"

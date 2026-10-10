@@ -94,18 +94,19 @@ def slugify(title: str) -> str:
 
 def render_starter(idea: Idea, day: date, today: date) -> str:
     slug = slugify(idea.title)
+    # Same fields and order as templates/Blog Post.md; no body H1 (Hugo prints the title).
     fm = {
-        "author": ["Jamal Hansen"],
-        "category": "[[Blog Post]]",
-        "created": today,
+        "title": idea.title,
         "description": idea.why,
+        "author": ["Jamal Hansen"],
+        "tags": ["morning-pages"],
+        "status": "outline",
+        "created": today,
+        "category": "[[Blog Post]]",
         "slug": slug,
         "source": f"morning pages {day.isoformat()}",
-        "status": "outline",
-        "tags": ["morning-pages"],
-        "title": idea.title,
     }
-    body = [f"# {idea.title}", "", f"> “{idea.quote.strip()}” (morning pages, {day.isoformat()})", ""]
+    body = [f"> “{idea.quote.strip()}” (morning pages, {day.isoformat()})", ""]
     for s in idea.sections[:4]:
         body += [f"## {s.heading}", "", f"*{s.prompt}*", ""]
     return "---\n" + yaml.safe_dump(fm, sort_keys=False, allow_unicode=True) + "---\n\n" + "\n".join(body)
