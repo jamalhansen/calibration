@@ -192,6 +192,12 @@ def test_prompt_sections_put_drafts_before_outlines_even_when_older(tmp_path):
         if s.note.name not in order:
             order.append(s.note.name)
     assert order == ["editing.md", "draft.md", "outline.md"]
+    # a finished draft (no thin sections) doesn't use up one of the `recent` slots
+    full = "---\nstatus: draft\n---\n## A\n\n" + "word " * 60 + "\n\n## B\n\n" + "word " * 60 + "\n"
+    (tmp_path / "done.md").write_text(full)
+    os.utime(tmp_path / "done.md", (1_950_000_000, 1_950_000_000))
+    notes = [s.note.name for s in writing.prompt_sections(tmp_path, recent=3, today=date(2026, 10, 10))]
+    assert "done.md" not in notes and "outline.md" in notes
     assert all(s.words < writing.THIN_SECTION_WORDS for s in writing.prompt_sections(tmp_path))
 
 
@@ -257,6 +263,7 @@ def test_prose_words_ignores_skeletons():
     assert writing.prose_words(skeleton, starter=False) == 3  # bullets (marker included) count outside starters
     assert writing.prose_words("---\nstatus: reference\n---\nLots of words here.") == 0
     assert writing.prose_words("```python\nx = 1\n```\nReal *emphasis* here.") == 3
+    assert writing.prose_words("<!-- TODO Jamal: four words -->\n![[image.png|alt text]]\nOne.") == 1
 
 
 def test_count_words_treats_starters_folder_as_skeletons(tmp_path):

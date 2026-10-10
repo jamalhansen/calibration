@@ -41,8 +41,8 @@ def prose_words(text: str, starter: bool = False) -> int:
 
 def _line_prose_words(raw: str, include_bullets: bool) -> int:
     line = raw.strip()
-    # HTML comments are notes to self (the TODO blocks in drafts), not prose.
-    if not line or line.startswith(("#", ">", "|", "<!--")):
+    # HTML comments are notes to self (the TODO blocks in drafts), and an embed is an image, not prose.
+    if not line or line.startswith(("#", ">", "|", "<!--", "![")):
         return 0
     if line.startswith("*") and line.endswith("*") and not line.startswith("* "):
         return 0
@@ -198,10 +198,15 @@ def prompt_sections(blog_dir: Path, recent: int = 3, today: date | None = None) 
             continue
         bucket.append((path.stat().st_mtime, path, text))
     newest_first = sorted(drafts, key=lambda t: t[0], reverse=True) + sorted(outlines, key=lambda t: t[0], reverse=True)
-    out = []
-    for _, path, text in newest_first[:recent]:
+    out, notes = [], 0
+    for _, path, text in newest_first:
+        if notes == recent:
+            break
         title, sections = section_words(text)
-        out += [Section(path, title or path.stem, h, w) for h, w in sections if w < THIN_SECTION_WORDS]
+        thin = [Section(path, title or path.stem, h, w) for h, w in sections if w < THIN_SECTION_WORDS]
+        if thin:  # a finished draft has nothing to offer; it doesn't use up a slot
+            out += thin
+            notes += 1
     return out
 
 
@@ -233,7 +238,8 @@ def list_drafts(blog_dir: Path, today: date | None = None) -> list[Draft]:
         if not _is_blog_post(fm):
             continue
         status = str(fm.get("status", "")).lower()
-        words = prose_words(text, starter="starters" in path.relative_to(blog_dir).parts)
+        # An outline's bullets and prompts are skeleton wherever it lives; only his prose counts.
+        words = prose_words(text, starter=status == "outline" or "starters" in path.relative_to(blog_dir).parts)
         if status not in DRAFT_STATUSES and not (status == "outline" and words > 0):
             continue
         title, sections = section_words(text)
